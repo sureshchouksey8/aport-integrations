@@ -6,11 +6,20 @@ const axios = require("axios");
 
 describe("APortClient", () => {
   let client;
+  let mockAxiosInstance;
   const mockApiKey = "test-api-key";
   const mockBaseUrl = "https://api.aport.io";
 
   beforeEach(() => {
     process.env.APORT_API_KEY = mockApiKey;
+    process.env.APORT_BASE_URL = mockBaseUrl;
+    
+    mockAxiosInstance = {
+      post: jest.fn(),
+      get: jest.fn(),
+    };
+    axios.create.mockReturnValue(mockAxiosInstance);
+    
     client = new APortClient();
   });
 
@@ -22,13 +31,6 @@ describe("APortClient", () => {
     it("should initialize with environment variables", () => {
       expect(client.apiKey).toBe(mockApiKey);
       expect(client.baseUrl).toBe(mockBaseUrl);
-    });
-
-    it("should throw error if no API key provided", () => {
-      delete process.env.APORT_API_KEY;
-      expect(() => new APortClient()).toThrow(
-        "APORT_API_KEY environment variable is required"
-      );
     });
 
     it("should use custom options when provided", () => {
@@ -49,9 +51,7 @@ describe("APortClient", () => {
           passport: { agent_id: "test-agent" },
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
       const result = await client.verify(
         "finance.payment.refund.v1",
@@ -72,9 +72,7 @@ describe("APortClient", () => {
           statusText: "Not Found",
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockRejectedValue(mockError),
-      });
+      mockAxiosInstance.post.mockRejectedValue(mockError);
 
       await expect(
         client.verify("finance.payment.refund.v1", "invalid-agent")
@@ -83,9 +81,7 @@ describe("APortClient", () => {
 
     it("should handle network errors", async () => {
       const mockError = new Error("Network Error");
-      axios.create.mockReturnValue({
-        post: jest.fn().mockRejectedValue(mockError),
-      });
+      mockAxiosInstance.post.mockRejectedValue(mockError);
 
       await expect(
         client.verify("finance.payment.refund.v1", "test-agent")
@@ -105,33 +101,122 @@ describe("APortClient", () => {
           ...mockPassportData,
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
       const result = await client.createPassport(mockPassportData);
 
       expect(result.agent_id).toBe("agt_inst_test_123");
       expect(result.name).toBe("Test Agent");
     });
+    
+    it("should throw error if API key is missing", async () => {
+      client.apiKey = null;
+      await expect(client.createPassport({})).rejects.toThrow(/API key required/);
+    });
+    
+    it("should handle API errors", async () => {
+      mockAxiosInstance.post.mockRejectedValue({ response: { data: { message: "Error" } } });
+      await expect(client.createPassport({})).rejects.toThrow("API Error: Error");
+    });
+    it("should handle network errors", async () => {
+      mockAxiosInstance.post.mockRejectedValue(new Error("Net Error"));
+      await expect(client.createPassport({})).rejects.toThrow("Network Error: Net Error");
+    });
+  });
+
+  describe("verifyPolicy", () => {
+    it("should verify policy successfully", async () => {
+      const mockResponse = { data: { allowed: true } };
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
+      const result = await client.verifyPolicy("policy", "agent", {});
+      expect(result.allowed).toBe(true);
+    });
+    it("should handle API errors", async () => {
+      mockAxiosInstance.post.mockRejectedValue({ response: { data: { message: "Error" } } });
+      await expect(client.verifyPolicy("policy", "agent")).rejects.toThrow("API Error: Error");
+    });
+    it("should handle network errors", async () => {
+      mockAxiosInstance.post.mockRejectedValue(new Error("Net Error"));
+      await expect(client.verifyPolicy("policy", "agent")).rejects.toThrow("Network Error: Net Error");
+    });
+  });
+
+  describe("getPolicyPack", () => {
+    it("should get policy pack successfully", async () => {
+      const mockResponse = { data: { id: "pack1" } };
+      mockAxiosInstance.get.mockResolvedValue(mockResponse);
+      const result = await client.getPolicyPack("pack1");
+      expect(result.id).toBe("pack1");
+    });
+    it("should handle API errors", async () => {
+      mockAxiosInstance.get.mockRejectedValue({ response: { data: { message: "Error" } } });
+      await expect(client.getPolicyPack("pack1")).rejects.toThrow("API Error: Error");
+    });
+    it("should handle network errors", async () => {
+      mockAxiosInstance.get.mockRejectedValue(new Error("Net Error"));
+      await expect(client.getPolicyPack("pack1")).rejects.toThrow("Network Error: Net Error");
+    });
+  });
+
+  describe("listPolicyPacks", () => {
+    it("should list policy packs successfully", async () => {
+      const mockResponse = { data: [{ id: "pack1" }] };
+      mockAxiosInstance.get.mockResolvedValue(mockResponse);
+      const result = await client.listPolicyPacks();
+      expect(result.length).toBe(1);
+    });
+    it("should handle API errors", async () => {
+      mockAxiosInstance.get.mockRejectedValue({ response: { data: { message: "Error" } } });
+      await expect(client.listPolicyPacks()).rejects.toThrow("API Error: Error");
+    });
+    it("should handle network errors", async () => {
+      mockAxiosInstance.get.mockRejectedValue(new Error("Net Error"));
+      await expect(client.listPolicyPacks()).rejects.toThrow("Network Error: Net Error");
+    });
   });
 
   describe("getPassport", () => {
-    it("should get passport successfully", async () => {
+    it("should get passport successfully via verify fallback", async () => {
       const mockResponse = {
         data: {
           agent_id: "agt_inst_test_123",
           name: "Test Agent",
         },
       };
-      axios.create.mockReturnValue({
-        get: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.get.mockResolvedValue(mockResponse);
 
       const result = await client.getPassport("agt_inst_test_123");
 
       expect(result.agent_id).toBe("agt_inst_test_123");
       expect(result.name).toBe("Test Agent");
+    });
+    
+    it("should fallback to direct fetch if verify fails", async () => {
+      mockAxiosInstance.get
+        .mockRejectedValueOnce(new Error("Verify failed"))
+        .mockResolvedValueOnce({ data: { agent_id: "agt", name: "Direct" } });
+      const result = await client.getPassport("agt");
+      expect(result.name).toBe("Direct");
+    });
+    
+    it("should throw if verify fails and no api key", async () => {
+      mockAxiosInstance.get.mockRejectedValueOnce(new Error("Verify failed"));
+      client.apiKey = null;
+      await expect(client.getPassport("agt")).rejects.toThrow(/API key required/);
+    });
+
+    it("should handle API errors", async () => {
+      mockAxiosInstance.get
+        .mockRejectedValueOnce(new Error("Verify failed"))
+        .mockRejectedValueOnce({ response: { data: { message: "Error" } } });
+      await expect(client.getPassport("agt")).rejects.toThrow("API Error: Error");
+    });
+
+    it("should handle network errors", async () => {
+      mockAxiosInstance.get
+        .mockRejectedValueOnce(new Error("Verify failed"))
+        .mockRejectedValueOnce(new Error("Net Error"));
+      await expect(client.getPassport("agt")).rejects.toThrow("Network Error: Net Error");
     });
   });
 
@@ -143,9 +228,7 @@ describe("APortClient", () => {
           message: "Passport suspended",
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
       const result = await client.suspendPassport(
         "agt_inst_test_123",
@@ -153,6 +236,16 @@ describe("APortClient", () => {
       );
 
       expect(result.success).toBe(true);
+    });
+    
+    it("should handle API errors", async () => {
+      mockAxiosInstance.post.mockRejectedValue({ response: { data: { message: "Error" } } });
+      await expect(client.suspendPassport("agt")).rejects.toThrow("API Error: Error");
+    });
+
+    it("should handle network errors", async () => {
+      mockAxiosInstance.post.mockRejectedValue(new Error("Net Error"));
+      await expect(client.suspendPassport("agt")).rejects.toThrow("Network Error: Net Error");
     });
   });
 });
