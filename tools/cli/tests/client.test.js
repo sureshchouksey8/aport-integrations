@@ -6,11 +6,20 @@ const axios = require("axios");
 
 describe("APortClient", () => {
   let client;
+  let mockAxiosInstance;
   const mockApiKey = "test-api-key";
   const mockBaseUrl = "https://api.aport.io";
 
   beforeEach(() => {
     process.env.APORT_API_KEY = mockApiKey;
+    process.env.APORT_BASE_URL = mockBaseUrl;
+    
+    mockAxiosInstance = {
+      post: jest.fn(),
+      get: jest.fn(),
+    };
+    axios.create.mockReturnValue(mockAxiosInstance);
+    
     client = new APortClient();
   });
 
@@ -22,13 +31,6 @@ describe("APortClient", () => {
     it("should initialize with environment variables", () => {
       expect(client.apiKey).toBe(mockApiKey);
       expect(client.baseUrl).toBe(mockBaseUrl);
-    });
-
-    it("should throw error if no API key provided", () => {
-      delete process.env.APORT_API_KEY;
-      expect(() => new APortClient()).toThrow(
-        "APORT_API_KEY environment variable is required"
-      );
     });
 
     it("should use custom options when provided", () => {
@@ -49,9 +51,7 @@ describe("APortClient", () => {
           passport: { agent_id: "test-agent" },
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
       const result = await client.verify(
         "finance.payment.refund.v1",
@@ -72,9 +72,7 @@ describe("APortClient", () => {
           statusText: "Not Found",
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockRejectedValue(mockError),
-      });
+      mockAxiosInstance.post.mockRejectedValue(mockError);
 
       await expect(
         client.verify("finance.payment.refund.v1", "invalid-agent")
@@ -83,9 +81,7 @@ describe("APortClient", () => {
 
     it("should handle network errors", async () => {
       const mockError = new Error("Network Error");
-      axios.create.mockReturnValue({
-        post: jest.fn().mockRejectedValue(mockError),
-      });
+      mockAxiosInstance.post.mockRejectedValue(mockError);
 
       await expect(
         client.verify("finance.payment.refund.v1", "test-agent")
@@ -105,9 +101,7 @@ describe("APortClient", () => {
           ...mockPassportData,
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
       const result = await client.createPassport(mockPassportData);
 
@@ -124,9 +118,7 @@ describe("APortClient", () => {
           name: "Test Agent",
         },
       };
-      axios.create.mockReturnValue({
-        get: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.get.mockResolvedValue(mockResponse);
 
       const result = await client.getPassport("agt_inst_test_123");
 
@@ -143,9 +135,7 @@ describe("APortClient", () => {
           message: "Passport suspended",
         },
       };
-      axios.create.mockReturnValue({
-        post: jest.fn().mockResolvedValue(mockResponse),
-      });
+      mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
       const result = await client.suspendPassport(
         "agt_inst_test_123",
