@@ -1,0 +1,14 @@
+{
+  "name": "aport-langchain-tool-guard",
+  "version": "1.0.0",
+  "description": "APort Tool Guard for LangChain JS",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "example": "node index.js"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.2.0",
+    "dotenv": "^16.4.5"
+  }
+}
